@@ -3,13 +3,13 @@
 <!-- declare arg to be passed in -->
  <arg name="control_off" default="True" />
  <arg name="min_segment_area" default="10" />
- <arg name="max_segment_area" default="1000" />
+ <arg name="max_segment_area" default="5000" />
  <arg name="camera_topic" default="kinect2/hd/image_color" />
- <arg name="workspace_width_offset" default="-40" />
- <arg name="workspace_height_offset" default="-180" />
+ <arg name="workspace_width_offset" default="0" />
+ <arg name="workspace_height_offset" default="0" />
  <arg name="visualize" default="False" />
 
-<node name="color_segmentation_node" pkg="color_segmentation" type="color_segmentation_node" >
+<node name="color_segmentation_node" pkg="color_segmentation" type="color_segmentation_node" output="screen">
   <param name="control_off" value="$(arg control_off)" />
   <param name="min_segment_area" value="$(arg min_segment_area)" />
   <param name="max_segment_area" value="$(arg max_segment_area)" />

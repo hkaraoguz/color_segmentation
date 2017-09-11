@@ -42,6 +42,9 @@ int workspace_max_x = 0;
 int workspace_min_y = 0;
 int workspace_max_y = 0;
 
+int workspace_topleft_y = 0;
+int workspace_topleft_x = 0;
+
 
 // Minimum area Parameter for the found segments
 float min_segment_area = 10;
@@ -54,8 +57,8 @@ float max_segment_area = 10000;
 //int workspace_height_offset = -90;
 
 // (hd)
-int workspace_width_offset =  -40;
-int workspace_height_offset = -180;
+int workspace_width_offset =  0;
+int workspace_height_offset = 0;
 
 // Initial workspace roi initialized as invalid
 Rect workspace_roi = Rect(-2,-2,0,0);
@@ -287,12 +290,33 @@ bool sortSegment(color_segmentation::Segment seg1, color_segmentation::Segment s
 
 }
 
+vector <float> calculateSegmentAngles(const vector< vector<Point> >& contours)
+{
+    vector<float> res(contours.size());
+    for(size_t i = 0; i < contours.size(); i++)
+    {
+        // fit bounding rectangle around contour
+        cv::RotatedRect rotatedRect = cv::minAreaRect(contours[i]);
+
+        // read points and angle
+        cv::Point2f rect_points[4];
+        rotatedRect.points( rect_points );
+
+        res[i] = rotatedRect.angle; // angle
+    }
+
+
+    return res;
+}
+
 // Create the segment objects
 vector<color_segmentation::Segment> createSegments(const Mat& rgbimage,const Mat& hueimage, const vector< vector<Point> >& hulls, const vector< vector<Point> >& contours)
 {
     vector<color_segmentation::Segment> result(hulls.size());
 
     vector<Point2i> centers = findSegmentCenters(hulls);
+
+    vector<float> angles = calculateSegmentAngles(contours);
 
     vector<Mat> masks = getSegmentMasks(rgbimage,contours);
 
@@ -318,6 +342,8 @@ vector<color_segmentation::Segment> createSegments(const Mat& rgbimage,const Mat
 
         asegment.pixelhull = points;
 
+        asegment.angle = angles[i];
+
 
         /***** Create mask image of the segment ************/
 
@@ -339,7 +365,7 @@ vector<color_segmentation::Segment> createSegments(const Mat& rgbimage,const Mat
 
         asegment.averagehue = calculateSegmentHueColor(hueimage,centers[i]);
 
-       // std::cout<<(int)asegment.averagehue<<std::endl;
+        // std::cout<<(int)asegment.averagehue<<std::endl;
 
         result[i] = asegment;
 
@@ -508,7 +534,7 @@ bool readColorConfig()
 
             std::istringstream ss(str);
 
-           // std::cout<<str<<endl;
+            // std::cout<<str<<endl;
 
             switch(count)
             {
@@ -542,7 +568,7 @@ bool readColorConfig()
 
     return true;
 }
-bool readWorkspaceConfig(int* minX, int* maxX, int* minY, int* maxY)
+bool readWorkspaceConfig(int *minX, int *maxX, int *minY, int *maxY,int *topLeftX,int *topLeftY)
 {
     string configpath = getHomePath();
 
@@ -566,13 +592,19 @@ bool readWorkspaceConfig(int* minX, int* maxX, int* minY, int* maxY)
             switch(count)
             {
             case 0:
-                *minX = atoi(str.data());
+                *topLeftX = atoi(str.data());
             case 1:
-                *maxX = atoi(str.data());
+                *topLeftY = atoi(str.data());
             case 2:
-                *minY  = atoi(str.data());
+                *minX = atoi(str.data());
             case 3:
+                *maxX = atoi(str.data());
+            case 4:
+                *minY  = atoi(str.data());
+            case 5:
                 *maxY = atoi(str.data());
+            default:
+                break;
 
             }
 
@@ -641,7 +673,7 @@ int main(int argc, char **argv)
     }
     cv::startWindowThread();
 
-    if(!readWorkspaceConfig(&workspace_min_x,&workspace_max_x,&workspace_min_y,&workspace_max_y))
+    if(!readWorkspaceConfig(&workspace_min_x,&workspace_max_x,&workspace_min_y,&workspace_max_y,&workspace_topleft_x,&workspace_topleft_y))
     {
         ROS_WARN("Could not read workspace dimensions! Working on whole image");
     }
