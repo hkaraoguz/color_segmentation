@@ -302,7 +302,21 @@ vector <float> calculateSegmentAngles(const vector< vector<Point> >& contours)
         cv::Point2f rect_points[4];
         rotatedRect.points( rect_points );
 
-        res[i] = rotatedRect.angle; // angle
+        cv::Point2f edge1 = cv::Vec2f(rect_points[1].x, rect_points[1].y) - cv::Vec2f(rect_points[0].x, rect_points[0].y);
+        cv::Point2f edge2 = cv::Vec2f(rect_points[2].x, rect_points[2].y) - cv::Vec2f(rect_points[1].x, rect_points[1].y);
+
+        cv::Point2f usedEdge = edge1;
+        if(cv::norm(edge2) > cv::norm(edge1))
+            usedEdge = edge2;
+
+        cv::Point2f reference = cv::Vec2f(1,0); // horizontal edge
+
+
+        double angle = 180.0f/CV_PI * acos((reference.x*usedEdge.x + reference.y*usedEdge.y) / (cv::norm(reference) *cv::norm(usedEdge)));
+
+
+
+        res[i] = angle; // angle
     }
 
 
