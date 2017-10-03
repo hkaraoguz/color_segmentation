@@ -4,10 +4,6 @@
 #include <geometry_msgs/Point32.h>
 #include <color_segmentation/Segment.h>
 #include <color_segmentation/SegmentArray.h>
-
-
-
-
 #include <boost/filesystem.hpp>
 
 #include <opencv2/highgui/highgui.hpp>
@@ -36,6 +32,8 @@ int iHighS = 255;
 int iLowV = 0;
 int iHighV = 255;
 
+
+// Parameters for Workspace Limits
 int workspace_min_x = 0;
 int workspace_max_x = 0;
 
@@ -65,6 +63,8 @@ Rect workspace_roi = Rect(-2,-2,0,0);
 
 // The name of the camera topic
 string camera_topic = "/kinect2/hd/image_color";
+
+string workspace_limits_file = "";
 
 // Visualization switch
 bool visualize = true;
@@ -123,12 +123,13 @@ vector<vector<Point> > extractContours(const cv::Mat& img)
 
     return contours;
 }
-// Filter the contours based on the area
+// Filter the contours based on the area and extract the convex hulls
 vector<vector<Point> > filterContours(const vector<vector<Point> >& contours, boost::shared_ptr<vector<vector<Point> > > remaining_contours)
 {
 
     vector<vector<Point> >hulls;
 
+    // For each contour, iterate
     for( size_t i = 0; i < contours.size(); i++ )
     {
         double area = fabs(contourArea(contours[i]));
@@ -261,7 +262,7 @@ Rect calculateWorkspaceROI(int image_width, int image_height)
         // Check if the calculated limits are correct
         if(width > image_width || width < 0 || height > image_height || height < 0)
         {
-            ROS_WARN("Workspace limits are not correct, check the workspace parameters. Abondoning the workspace limitation parameters");
+            ROS_WARN("Workspace limits are not correct, check the workspace parameters. Skipping the workspace limitation parameters");
             workspace_max_x = workspace_min_x;
             workspace_max_y = workspace_min_y;
 
@@ -275,9 +276,7 @@ Rect calculateWorkspaceROI(int image_width, int image_height)
         roi.width = width;
         roi.height = height;
 
-        //Rect roi = Rect(workspace_min_x, workspace_min_y, width, height);
 
-        //return roi;
     }
 
     return roi;
@@ -290,6 +289,7 @@ bool sortSegment(color_segmentation::Segment seg1, color_segmentation::Segment s
 
 }
 
+// Calculate the angle of the piece depending on the longer edge
 vector <float> calculateSegmentAngles(const vector< vector<Point> >& contours)
 {
     vector<float> res(contours.size());
@@ -379,8 +379,6 @@ vector<color_segmentation::Segment> createSegments(const Mat& rgbimage,const Mat
 
         asegment.averagehue = calculateSegmentHueColor(hueimage,centers[i]);
 
-        // std::cout<<(int)asegment.averagehue<<std::endl;
-
         result[i] = asegment;
 
     }
@@ -396,9 +394,8 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg)
     Mat imgHSV;
     try
     {
-        //cv::imshow("view", cv_bridge::toCvShare(msg, "bgr8")->image);
-
-        cvtColor(cv_bridge::toCvShare(msg, "bgr8")->image, imgHSV, COLOR_BGR2HSV); //Convert the captured frame from BGR to HSV
+        //Convert the captured frame from BGR to HSV
+        cvtColor(cv_bridge::toCvShare(msg, "bgr8")->image, imgHSV, COLOR_BGR2HSV);
     }
     catch (cv_bridge::Exception& e)
     {
@@ -496,7 +493,7 @@ void saveConfig(int state, void* userdata)
 
     if(!(boost::filesystem::exists(dir)))
     {
-        std::cout<<"Doesn't Exists"<<std::endl;
+        std::cout<<"Path Doesn't Exist! Creating..."<<std::endl;
     }
 
     if (boost::filesystem::create_directory(dir))
@@ -582,13 +579,23 @@ bool readColorConfig()
 
     return true;
 }
-bool readWorkspaceConfig(int *minX, int *maxX, int *minY, int *maxY,int *topLeftX,int *topLeftY)
+bool readWorkspaceConfig(string path, int *minX, int *maxX, int *minY, int *maxY)
 {
-    string configpath = getHomePath();
+    string configpath;
 
-    configpath += "/.ros/workspace_segmentation/";
+    if (path == "")
+    {
 
-    configpath += "workspace.txt";
+        string configpath = getHomePath();
+
+        configpath += "/.ros/workspace_segmentation/";
+
+        configpath += "workspace.txt";
+    }
+    else
+    {
+        configpath = path;
+    }
 
     ifstream stream(configpath.data());
 
@@ -606,16 +613,12 @@ bool readWorkspaceConfig(int *minX, int *maxX, int *minY, int *maxY,int *topLeft
             switch(count)
             {
             case 0:
-                *topLeftX = atoi(str.data());
-            case 1:
-                *topLeftY = atoi(str.data());
-            case 2:
                 *minX = atoi(str.data());
-            case 3:
+            case 1:
                 *maxX = atoi(str.data());
-            case 4:
+            case 2:
                 *minY  = atoi(str.data());
-            case 5:
+            case 3:
                 *maxY = atoi(str.data());
             default:
                 break;
@@ -647,6 +650,7 @@ int main(int argc, char **argv)
     // Private node handle
     ros::NodeHandle pnh("~");
 
+    pnh.getParam("workspace_limits_file",workspace_limits_file);
     pnh.getParam("control_off",control_off);
     pnh.getParam("min_segment_area",min_segment_area);
     pnh.getParam("max_segment_area",max_segment_area);
@@ -658,9 +662,8 @@ int main(int argc, char **argv)
     // If we cannot read the color config or we need the control screen to be shown
     if(!readColorConfig() || !control_off)
     {
-        ROS_WARN("Could not read color configuration! Activating control panel");
+        ROS_WARN("Could not read color configuration or control panel is activated!");
 
-        //cv::namedWindow("view");
 
         namedWindow("Control",CV_WINDOW_AUTOSIZE ); //create a window called "Control"
         string name = "Save Config";
@@ -687,7 +690,7 @@ int main(int argc, char **argv)
     }
     cv::startWindowThread();
 
-    if(!readWorkspaceConfig(&workspace_min_x,&workspace_max_x,&workspace_min_y,&workspace_max_y,&workspace_topleft_x,&workspace_topleft_y))
+    if(!readWorkspaceConfig(workspace_limits_file,&workspace_min_x,&workspace_max_x,&workspace_min_y,&workspace_max_y))
     {
         ROS_WARN("Could not read workspace dimensions! Working on whole image");
     }
@@ -703,5 +706,3 @@ int main(int argc, char **argv)
     ros::spin();
     cv::destroyAllWindows();
 }
-
-

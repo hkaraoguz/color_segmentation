@@ -54,7 +54,6 @@ find_package(OpenCV REQUIRED)
    FILES
    Segment.msg
    SegmentArray.msg
-#   Message2.msg
  )
 
 ## Generate services in the 'srv' folder
@@ -64,12 +63,6 @@ find_package(OpenCV REQUIRED)
 #   Service2.srv
 # )
 
-## Generate actions in the 'action' folder
-# add_action_files(
-#   FILES
-#   Action1.action
-#   Action2.action
-# )
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
@@ -109,7 +102,6 @@ generate_messages(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-   #INCLUDE_DIRS include
 #  LIBRARIES color_segmentation
    CATKIN_DEPENDS image_transport sensor_msgs geometry_msgs
 #  DEPENDS system_lib
